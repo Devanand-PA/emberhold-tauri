@@ -1,5 +1,13 @@
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use serde::Deserialize;
 
+/// Native replacement for a blob download (WebKitGTK has no download handler,
+/// so `<a download>` clicks silently fail on Linux).
+///
+/// Called by `frontend/src/tauri-bridge.js` when the game exports a save
+/// backup: opens the platform save dialog and writes the file when confirmed.
+/// Returns null when the player cancels the dialog.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[derive(Deserialize)]
 struct SaveExportArgs {
     /// Suggested file name, e.g. "emberhold-slot1-Bob-2026-11-20.json".
@@ -8,12 +16,7 @@ struct SaveExportArgs {
     contents: String,
 }
 
-/// Native replacement for a blob download (WebKitGTK has no download handler,
-/// so `<a download>` clicks silently fail on Linux).
-///
-/// Called by `frontend/src/tauri-bridge.js` when the game exports a save
-/// backup: opens the platform save dialog and writes the file when confirmed.
-/// Returns null when the player cancels the dialog.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 async fn save_export_file(args: SaveExportArgs) -> Result<Option<String>, String> {
     let mut name = args.filename.trim().to_string();
@@ -48,8 +51,12 @@ async fn save_export_file(args: SaveExportArgs) -> Result<Option<String>, String
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![save_export_file])
+    let builder = tauri::Builder::default();
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.invoke_handler(tauri::generate_handler![save_export_file]);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running Emberhold");
 }

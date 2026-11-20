@@ -17,6 +17,9 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
 # Native save-file dialog: WebKitGTK (Tauri on Linux) has no download handler,
 # so the game's 📤 save export (blob + <a download>) needs a native path.
+# Desktop only — rfd has no Android/iOS backend.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 rfd = "0.15"
