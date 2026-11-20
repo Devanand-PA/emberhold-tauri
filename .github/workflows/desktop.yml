@@ -77,3 +77,7 @@ jobs:
           releaseBody: |
             Desktop builds for Windows, macOS and Linux.
             The Android APK is uploaded as an artifact by the **Android APK** workflow.
+          releaseDraft: true
+          prerelease: false
+          uploadWorkflowArtifacts: true
+          args: ${{ matrix.args }}
