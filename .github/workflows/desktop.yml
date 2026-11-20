@@ -1,7 +1,10 @@
 name: Desktop releases
 
 # Builds installers for Windows (x64), macOS (Apple Silicon + Intel) and Linux
-# (x64 .deb/.rpm) and uploads them to a draft GitHub release.
+# (x64 .deb/.rpm/.AppImage) and uploads them to a draft GitHub release.
+# The Linux `--bundles` argument overrides tauri.linux.conf.json so an
+# AppImage is produced in CI; tauri-action detects *.AppImage files and
+# uploads them to the release alongside the .deb/.rpm packages.
 # Trigger: push a v* tag, or run manually from the Actions tab.
 
 on:
@@ -28,7 +31,10 @@ jobs:
             args: "--target x86_64-apple-darwin"
           - name: Linux (x64)
             platform: ubuntu-22.04
-            args: ""
+            # Override the repo's tauri.linux.conf.json targets (deb/rpm) so
+            # the AppImage is built too. tauri-action uploads all bundles it
+            # finds (including *.AppImage) to the GitHub release.
+            args: "--bundles deb,rpm,appimage"
           - name: Windows (x64)
             platform: windows-latest
             args: ""
