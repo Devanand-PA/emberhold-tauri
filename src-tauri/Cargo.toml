@@ -1,0 +1,22 @@
+[package]
+name = "emberhold"
+version = "1.0.0"
+description = "Emberhold — Living World Dungeon Crawler"
+authors = ["thevoidis999"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "emberhold_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Native save-file dialog: WebKitGTK (Tauri on Linux) has no download handler,
+# so the game's 📤 save export (blob + <a download>) needs a native path.
+rfd = "0.15"

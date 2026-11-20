@@ -1,0 +1,76 @@
+name: Android APK
+
+# Builds an installable (debug-signed) Android APK for all four ABIs.
+# The Tauri Android project is generated during the run with `tauri android init`.
+# Trigger: push a v* tag, or run manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  NDK_VERSION: 27.0.12077973
+  ANDROID_PLATFORM: 37
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-${{ env.ANDROID_PLATFORM }}" \
+            "build-tools;${{ env.ANDROID_PLATFORM }}.0.0" \
+            "ndk;${{ env.NDK_VERSION }}"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Install Rust with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust builds
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Initialize the Tauri Android project
+        run: npx tauri android init --ci
+
+      - name: Build APK
+        run: npx tauri android build --apk --debug --ci
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: emberhold-android-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 30
