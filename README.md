@@ -32,9 +32,17 @@ the game never evaluates it. All gameplay lives in `frontend/src/*.js`, which
 npm install      # installs the Tauri CLI locally
 npm run dev      # launch the app in development mode
 npm run build    # produce installers in src-tauri/target/release/bundle/
+npm test         # unit-test the tauri-bridge save-export logic (plain node)
 ```
 
 `npm run tauri -- <args>` passes any arguments through to the Tauri CLI.
+
+Verified on Linux (Arch, X11): `npm run build` produces
+`Emberhold_1.0.0_amd64.deb`, `Emberhold-1.0.0-1.x86_64.rpm` and
+`Emberhold_1.0.0_amd64.AppImage`; the window opens, the game boots
+(IndexedDB world store + localStorage keys are written under
+`~/.local/share/com.thevoidis999.emberhold`), and 📤 export reaches the native
+save dialog.
 
 ## Notes
 
