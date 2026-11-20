@@ -15,7 +15,7 @@ permissions:
 
 env:
   NDK_VERSION: 27.0.12077973
-  ANDROID_PLATFORM: 37
+  ANDROID_PLATFORM: 36
 
 jobs:
   build-apk:
@@ -67,6 +67,13 @@ jobs:
 
       - name: Initialize the Tauri Android project
         run: npx tauri android init --ci
+
+      - name: Match generated Gradle config to installed SDK
+        run: |
+          # Tauri's template currently targets API 37; the GitHub runner's
+          # sdkmanager only offers API 36, so build against 36 instead.
+          sed -i -E 's/(compileSdk|targetSdk) = 37/\1 = ${{ env.ANDROID_PLATFORM }}/' \
+            src-tauri/gen/android/app/build.gradle.kts
 
       - name: Build APK
         run: npx tauri android build --apk --debug --ci
