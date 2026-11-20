@@ -75,8 +75,9 @@ Two workflows live in `.github/workflows/`:
   artifacts.
 - **Android APK** (`android.yml`) — installs the Android SDK/NDK and JDK,
   generates the Tauri Android project with `tauri android init --ci`, builds an
-  installable debug-signed universal APK for all four ABIs, and uploads it as
-  the `emberhold-android-apk` workflow artifact.
+  installable debug-signed universal APK for all four ABIs, and attaches the
+  raw `.apk` file directly to the same draft GitHub release (not as a zipped
+  workflow artifact), so it downloads ready to install.
 
 Both run on a pushed `v*` tag (for example `git tag v1.0.0 && git push origin v1.0.0`)
 or can be started manually from the **Actions** tab → **Run workflow**.

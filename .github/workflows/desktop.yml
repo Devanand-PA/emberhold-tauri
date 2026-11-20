@@ -82,7 +82,8 @@ jobs:
           releaseName: "Emberhold v__VERSION__"
           releaseBody: |
             Desktop builds for Windows, macOS and Linux.
-            The Android APK is uploaded as an artifact by the **Android APK** workflow.
+            The Android APK is attached to this release as a raw, installable
+            .apk file by the **Android APK** workflow.
           releaseDraft: true
           prerelease: false
           uploadWorkflowArtifacts: true

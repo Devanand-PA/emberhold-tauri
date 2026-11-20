@@ -2,6 +2,8 @@ name: Android APK
 
 # Builds an installable (debug-signed) Android APK for all four ABIs.
 # The Tauri Android project is generated during the run with `tauri android init`.
+# The finished .apk is attached directly to the GitHub release (as a raw file,
+# not a zipped workflow artifact), so it downloads ready to install.
 # Trigger: push a v* tag, or run manually from the Actions tab.
 
 on:
@@ -11,7 +13,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   NDK_VERSION: 27.0.12077973
@@ -78,12 +80,27 @@ jobs:
       - name: Build APK
         run: npx tauri android build --apk --debug --ci
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Determine release tag
+        id: release
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            version=$(node -p "require('./package.json').version")
+            echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Attach the .apk itself to the release so users download an installable
+      # APK, not a ZIP-wrapped workflow artifact. Matches the draft release the
+      # desktop workflow creates for the same tag.
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: emberhold-android-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-          if-no-files-found: error
-          retention-days: 30
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Emberhold ${{ steps.release.outputs.tag }}
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 
 # Re-pushed so GitHub picks up the workflow.
