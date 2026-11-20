@@ -67,4 +67,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - run: echo ok
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
