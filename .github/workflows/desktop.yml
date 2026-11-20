@@ -15,6 +15,23 @@ permissions:
 
 jobs:
   build-desktop:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - name: macOS (Intel)
+            platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+          - name: Linux (x64)
+            platform: ubuntu-22.04
+            args: ""
+          - name: Windows (x64)
+            platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
     steps:
       - run: echo ok
