@@ -91,14 +91,14 @@ jobs:
           fi
 
       # Attach the .apk itself to the release so users download an installable
-      # APK, not a ZIP-wrapped workflow artifact. Matches the draft release the
+      # APK, not a ZIP-wrapped workflow artifact. Matches the release the
       # desktop workflow creates for the same tag.
       - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: Emberhold ${{ steps.release.outputs.tag }}
-          draft: true
+          draft: false
           prerelease: false
           fail_on_unmatched_files: true
           files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk

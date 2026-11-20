@@ -1,7 +1,7 @@
 name: Desktop releases
 
 # Builds installers for Windows (x64), macOS (Apple Silicon + Intel) and Linux
-# (x64 .deb/.rpm/.AppImage) and uploads them to a draft GitHub release.
+# (x64 .deb/.rpm/.AppImage) and uploads them to a GitHub release.
 # The Linux `--bundles` argument overrides tauri.linux.conf.json so an
 # AppImage is produced in CI; tauri-action detects *.AppImage files and
 # uploads them to the release alongside the .deb/.rpm packages.
@@ -84,7 +84,7 @@ jobs:
             Desktop builds for Windows, macOS and Linux.
             The Android APK is attached to this release as a raw, installable
             .apk file by the **Android APK** workflow.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           uploadWorkflowArtifacts: true
           args: ${{ matrix.args }}

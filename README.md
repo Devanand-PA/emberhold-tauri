@@ -70,14 +70,13 @@ Two workflows live in `.github/workflows/`:
 
 - **Desktop releases** (`desktop.yml`) — builds Windows x64 (`.msi` + NSIS
   `.exe`), macOS arm64 + x64 (`.app`/`.dmg`) and Linux x64 (`.deb`/`.rpm`)
-  with the official `tauri-action`, then uploads everything to a **draft**
-  GitHub release named `v<version>`. Bundles are also attached as workflow
-  artifacts.
+  with the official `tauri-action`, then publishes everything to a GitHub
+  release named `v<version>`. Bundles are also attached as workflow artifacts.
 - **Android APK** (`android.yml`) — installs the Android SDK/NDK and JDK,
   generates the Tauri Android project with `tauri android init --ci`, builds an
   installable debug-signed universal APK for all four ABIs, and attaches the
-  raw `.apk` file directly to the same draft GitHub release (not as a zipped
-  workflow artifact), so it downloads ready to install.
+  raw `.apk` file directly to the same published GitHub release (not as a
+  zipped workflow artifact), so it downloads ready to install.
 
 Both run on a pushed `v*` tag (for example `git tag v1.0.0 && git push origin v1.0.0`)
 or can be started manually from the **Actions** tab → **Run workflow**.
