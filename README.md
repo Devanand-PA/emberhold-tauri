@@ -9,7 +9,8 @@ native desktop app.
 ```
 frontend/          the game itself (index.html + src/) — served by Tauri
   assets/logo.jpg  local copy of the title-screen logo
-src-tauri/         Rust/Tauri project, config and icons
+  src/tauri-bridge.js  native save-export bridge (loaded first; no-op in a browser)
+src-tauri/         Rust/Tauri project, config, icons
 package.json       Tauri CLI as an npm dev-dependency (no frontend build step)
 README_EXPORT.txt  original Perchance export notes
 ```
@@ -44,7 +45,14 @@ npm run build    # produce installers in src-tauri/target/release/bundle/
 - NPC chat (Prexzy) and multiplayer (PeerJS) still use their public online
   services. Both degrade gracefully to offline play — NPC chat falls back to
   the built-in persona replies.
-- The title-screen 📖 Codex opens in a second webview window.
+- The 📖 Codex is an in-tab movable panel (no second window), so nothing extra
+  is needed there.
+- **Save export** (📤 on a slot / multiplayer world row) normally triggers a
+  blob download. WebKitGTK (Tauri on Linux) has no download handler, so
+  `frontend/src/tauri-bridge.js` intercepts those clicks and writes the backup
+  through a native save dialog (Rust command `save_export_file`, using the
+  `rfd` crate). Save import (📥) uses a file picker and works as-is. The bridge
+  is a no-op when the same files are opened in a normal browser.
 - To change the window size/title or bundle identifier, edit
   `src-tauri/tauri.conf.json`.
 
