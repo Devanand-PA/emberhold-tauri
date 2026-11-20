@@ -74,3 +74,5 @@ jobs:
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 30
+
+# Re-pushed so GitHub picks up the workflow.
