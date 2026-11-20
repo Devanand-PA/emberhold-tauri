@@ -38,11 +38,15 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default "tools" package was retired by Google and makes
+          # sdkmanager fail, so install only the cmdline tools we actually use.
+          packages: "platform-tools"
+          accept-android-sdk-licenses: true
 
       - name: Install Android SDK packages
         run: |
           sdkmanager --install \
-            "platform-tools" \
             "platforms;android-${{ env.ANDROID_PLATFORM }}" \
             "build-tools;${{ env.ANDROID_PLATFORM }}.0.0" \
             "ndk;${{ env.NDK_VERSION }}"
