@@ -19,9 +19,14 @@
     var internals = window.__TAURI_INTERNALS__;
     if (!internals || typeof internals.invoke !== "function") return; // browser: no-op
 
+    var invoke = internals.invoke.bind(internals);
     window.EmberholdDesktop = {
       isDesktop: true,
-      saveExportFile: internals.invoke.bind(null, "save_export_file"),
+      isTauri: true,
+      saveExportFile: function (args) { return invoke("save_export_file", args); },
+      setFullscreen: function (fullscreen) { return invoke("set_fullscreen", { fullscreen: !!fullscreen }); },
+      isFullscreen: function () { return invoke("is_fullscreen"); },
+      toggleFullscreen: function () { return invoke("toggle_fullscreen"); },
     };
 
     var toast = function (msg, ms) {

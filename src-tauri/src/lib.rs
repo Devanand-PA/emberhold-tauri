@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::Manager;
+use tauri::WebviewWindow;
 
 /// Native replacement for a blob download (WebKitGTK has no download handler,
 /// so `<a download>` clicks silently fail on Linux).
@@ -175,13 +176,43 @@ async fn pull_game_updates(app: tauri::AppHandle) -> Result<String, String> {
     Ok(short_head(&dir).unwrap_or(local))
 }
 
+#[tauri::command]
+fn set_fullscreen(window: WebviewWindow, fullscreen: bool) -> Result<(), String> {
+    window.set_fullscreen(fullscreen).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn is_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+    window.is_fullscreen().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn toggle_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+    let next = !window.is_fullscreen().map_err(|e| e.to_string())?;
+    window.set_fullscreen(next).map_err(|e| e.to_string())?;
+    Ok(next)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let builder = builder
-        .invoke_handler(tauri::generate_handler![save_export_file, game_commit, pull_game_updates]);
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        save_export_file,
+        game_commit,
+        pull_game_updates,
+        set_fullscreen,
+        is_fullscreen,
+        toggle_fullscreen
+    ]);
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        set_fullscreen,
+        is_fullscreen,
+        toggle_fullscreen
+    ]);
 
     builder
         .run(tauri::generate_context!())

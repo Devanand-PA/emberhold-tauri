@@ -1,9 +1,10 @@
 name: Android APK
 
-# Builds an installable (debug-signed) Android APK for all four ABIs.
+# Builds installable (debug-signed) Android APKs for common phone ABIs.
 # The Tauri Android project is generated during the run with `tauri android init`.
-# The finished .apk is attached directly to the GitHub release (as a raw file,
-# not a zipped workflow artifact), so it downloads ready to install.
+# Finished APKs are split per ABI and attached directly to the GitHub release
+# (as raw files, not zipped workflow artifacts), so they download ready to install.
+# For smaller distribution artifacts, prefer signed release builds/AABs with ABI splits.
 # Trigger: push a v* tag, or run manually from the Actions tab.
 
 on:
@@ -59,7 +60,7 @@ jobs:
       - name: Install Rust with Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi
 
       - name: Cache Rust builds
         uses: swatinem/rust-cache@v2
@@ -85,7 +86,7 @@ jobs:
             src-tauri/gen/android/app/build.gradle.kts
 
       - name: Build APK
-        run: npx tauri android build --apk --debug --ci
+        run: npx tauri android build --apk --debug --split-per-abi --target aarch64 --target armv7 --ci
 
       - name: Determine release tag
         id: release
