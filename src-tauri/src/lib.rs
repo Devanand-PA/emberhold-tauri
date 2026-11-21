@@ -178,19 +178,44 @@ async fn pull_game_updates(app: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 fn set_fullscreen(window: Window, fullscreen: bool) -> Result<(), String> {
-    window.set_fullscreen(fullscreen).map_err(|e| e.to_string())
+    #[cfg(desktop)]
+    {
+        window.set_fullscreen(fullscreen).map_err(|e| e.to_string())
+    }
+    #[cfg(mobile)]
+    {
+        let _ = (window, fullscreen);
+        Err("fullscreen control is not supported on this platform".to_string())
+    }
 }
 
 #[tauri::command]
 fn is_fullscreen(window: Window) -> Result<bool, String> {
-    window.is_fullscreen().map_err(|e| e.to_string())
+    #[cfg(desktop)]
+    {
+        window.is_fullscreen().map_err(|e| e.to_string())
+    }
+    #[cfg(mobile)]
+    {
+        let _ = window;
+        // Mobile app runs fullscreen by default; native toggle API unavailable here.
+        Ok(true)
+    }
 }
 
 #[tauri::command]
 fn toggle_fullscreen(window: Window) -> Result<bool, String> {
-    let next = !window.is_fullscreen().map_err(|e| e.to_string())?;
-    window.set_fullscreen(next).map_err(|e| e.to_string())?;
-    Ok(next)
+    #[cfg(desktop)]
+    {
+        let next = !window.is_fullscreen().map_err(|e| e.to_string())?;
+        window.set_fullscreen(next).map_err(|e| e.to_string())?;
+        Ok(next)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = window;
+        Err("fullscreen control is not supported on this platform".to_string())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
