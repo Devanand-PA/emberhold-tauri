@@ -1,0 +1,112 @@
+#!/usr/bin/env node
+/**
+ * Rebuilds `frontend/` (the directory Tauri serves) from two inputs:
+ *
+ *   game/     git submodule -> https://github.com/Devanand-PA/emberhold.git
+ *   overlay/  Tauri-only additions that must survive game updates:
+ *               src/tauri-bridge.js  native save-export bridge
+ *               assets/logo.jpg      offline copy of the title logo
+ *
+ * Plus three small edits applied to the game's index.html:
+ *   1. prepend the HTML5 doctype / <head> wrapper (the Perchance export omits it)
+ *   2. point the title logo at the bundled copy instead of a remote URL
+ *   3. load tauri-bridge.js before all other game scripts
+ *
+ * `frontend/` is generated output and is gitignored — never edit it by hand.
+ *
+ * Usage:
+ *   node scripts/sync-frontend.mjs            copy the pinned game commit
+ *   node scripts/sync-frontend.mjs --latest   update the submodule to the game's
+ *                                             latest master, then copy
+ */
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const gameDir = path.join(root, "game");
+const overlayDir = path.join(root, "overlay");
+const outDir = path.join(root, "frontend");
+const indexOut = path.join(outDir, "index.html");
+const headTemplate = path.join(root, "scripts", "index-head.html");
+
+function die(message) {
+  console.error(`sync-frontend: ${message}`);
+  process.exit(1);
+}
+
+if (!existsSync(path.join(gameDir, "index.html"))) {
+  die(
+    "the game submodule is empty. Initialise it first:\n" +
+    "  git submodule update --init --recursive"
+  );
+}
+if (!existsSync(headTemplate)) die(`missing ${headTemplate}`);
+if (!existsSync(path.join(overlayDir, "src", "tauri-bridge.js"))) {
+  die("missing overlay/src/tauri-bridge.js");
+}
+
+if (process.argv.includes("--latest")) {
+  console.log("sync-frontend: fetching latest game from origin...");
+  execFileSync("git", ["submodule", "update", "--init", "--remote", "game"], {
+    cwd: root,
+    stdio: "inherit",
+  });
+}
+
+let sourceCommit = "unknown";
+try {
+  sourceCommit = execFileSync("git", ["-C", gameDir, "rev-parse", "--short", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+} catch {
+  // not fatal — a plain copy of the repo still works
+}
+
+// Start from a clean directory so removed game files don't linger.
+rmSync(outDir, { recursive: true, force: true });
+mkdirSync(outDir, { recursive: true });
+
+// 1. the game itself, excluding git metadata.
+cpSync(gameDir, outDir, {
+  recursive: true,
+  filter: (src) => !src.split(path.sep).includes(".git"),
+});
+
+// 2. Tauri-only files layered on top.
+cpSync(overlayDir, outDir, { recursive: true });
+
+// 3. patch index.html.
+let html = readFileSync(indexOut, "utf8");
+
+// HTML5 wrapper (Perchance exports start at <style>).
+if (!/^\s*<!DOCTYPE html>/i.test(html)) {
+  html = readFileSync(headTemplate, "utf8").trimEnd() + "\n" + html;
+}
+
+// Bundled logo, so the title screen works offline. Replace the <img src> of
+// the first .title-logo heading regardless of which remote URL upstream uses.
+html = html.replace(
+  /<h1\b[^>]*\btitle-logo\b[^>]*>[\s\S]*?<img\b[^>]*\bsrc="[^"]*"/i,
+  (match) => match.replace(/\bsrc="[^"]*"/i, 'src="assets/logo.jpg"')
+);
+
+// Native save-export bridge must load before the game scripts that use it.
+if (!html.includes("src/tauri-bridge.js")) {
+  const tag = '<script src="src/tauri-bridge.js"></script>\n';
+  if (/<script\s+src=/i.test(html)) {
+    html = html.replace(/<script\s+src=/i, (match) => tag + match);
+  } else if (/<\/body>/i.test(html)) {
+    html = html.replace(/<\/body>/i, (match) => tag + match);
+  } else {
+    html += "\n" + tag;
+  }
+}
+
+writeFileSync(indexOut, html, "utf8");
+
+console.log(
+  `sync-frontend: frontend/ rebuilt from game/ @ ${sourceCommit}` +
+  (process.argv.includes("--latest") ? " (latest)" : "")
+);
