@@ -1,10 +1,20 @@
 name: Android APK
 
-# Builds installable (debug-signed) Android APKs for common phone ABIs.
+# Builds optimized Android release APKs (and AABs) for common phone ABIs.
 # The Tauri Android project is generated during the run with `tauri android init`.
-# Finished APKs are split per ABI and attached directly to the GitHub release
+# Finished artifacts are split per ABI and attached directly to the GitHub release
 # (as raw files, not zipped workflow artifacts), so they download ready to install.
-# For smaller distribution artifacts, prefer signed release builds/AABs with ABI splits.
+#
+# Signing:
+#   For update-compatible release signing, configure repository secrets:
+#     ANDROID_KEYSTORE_BASE64  - base64-encoded .jks/.keystore file
+#     ANDROID_KEYSTORE_PASSWORD
+#     ANDROID_KEY_ALIAS
+#     ANDROID_KEY_PASSWORD
+#   If these are not set, the workflow generates a temporary CI signing key so
+#   release APKs remain installable, but upgrades will not be signature-compatible
+#   across different CI-generated keys.
+#
 # Trigger: push a v* tag, or run manually from the Actions tab.
 
 on:
@@ -19,6 +29,10 @@ permissions:
 env:
   NDK_VERSION: 27.0.12077973
   ANDROID_PLATFORM: 36
+  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
 jobs:
   build-apk:
@@ -85,8 +99,92 @@ jobs:
           sed -i -E 's/(compileSdk|targetSdk) = 37/\1 = ${{ env.ANDROID_PLATFORM }}/' \
             src-tauri/gen/android/app/build.gradle.kts
 
-      - name: Build APK
-        run: npx tauri android build --apk --debug --split-per-abi --target aarch64 --target armv7 --ci
+      - name: Configure Android release signing
+        run: |
+          python3 - <<'PY'
+          import base64, os, pathlib, subprocess, sys, textwrap
+          root = pathlib.Path("src-tauri/gen/android")
+          app_gradle = root / "app/build.gradle.kts"
+          if not app_gradle.exists():
+            print("No app/build.gradle.kts found", file=sys.stderr)
+            sys.exit(1)
+
+          ks = os.environ.get("ANDROID_KEYSTORE_BASE64", "").strip()
+          ks_pass = os.environ.get("ANDROID_KEYSTORE_PASSWORD", "").strip()
+          alias = os.environ.get("ANDROID_KEY_ALIAS", "").strip()
+          key_pass = os.environ.get("ANDROID_KEY_PASSWORD", "").strip()
+
+          keystore_path = root / "release-keystore.jks"
+          if ks and ks_pass and alias and key_pass:
+            keystore_path.write_bytes(base64.b64decode(ks))
+            print("Using release keystore from repository secrets.")
+          else:
+            ks_pass = "emberhold-ci"
+            alias = "emberhold"
+            key_pass = "emberhold-ci"
+            subprocess.check_call([
+              "keytool","-genkeypair","-v",
+              "-keystore", str(keystore_path),
+              "-storepass", ks_pass,
+              "-alias", alias,
+              "-keypass", key_pass,
+              "-keyalg","RSA","-keysize","2048","-validity","10000",
+              "-dname","CN=Emberhold CI, OU=CI, O=Emberhold, L=Internet, S=Internet, C=US",
+            ])
+            print("::warning::ANDROID_KEYSTORE_* secrets not set; generated temporary CI signing key. APKs are installable, but upgrades may not be signature-compatible across keys.")
+
+          props = root / "keystore.properties"
+          props.write_text(
+            f"storeFile={keystore_path.resolve().as_posix()}\n"
+            f"storePassword={ks_pass}\n"
+            f"keyAlias={alias}\n"
+            f"keyPassword={key_pass}\n"
+          )
+
+          s = app_gradle.read_text()
+          if "keystore.properties" not in s:
+            # Add imports and signing config.
+            import_block = """import java.io.FileInputStream
+import java.util.Properties
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+"""
+            s = import_block + s
+            s = s.replace(
+              "android {\n",
+              """android {
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+""",
+              1,
+            )
+            s = s.replace(
+              "getByName(\"release\") {\n",
+              """getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+""",
+              1,
+            )
+            app_gradle.write_text(s)
+            print("Patched app/build.gradle.kts with release signing config.")
+          else:
+            print("Release signing config already present.")
+          PY
+
+      - name: Build Android release artifacts
+        run: npx tauri android build --apk --aab --split-per-abi --target aarch64 --target armv7 --ci
 
       - name: Determine release tag
         id: release
@@ -98,17 +196,17 @@ jobs:
             echo "tag=v${version}" >> "$GITHUB_OUTPUT"
           fi
 
-      # Attach the .apk itself to the release so users download an installable
-      # APK, not a ZIP-wrapped workflow artifact. Matches the release the
-      # desktop workflow creates for the same tag.
-      - name: Attach APK to GitHub Release
+      # Attach installable release artifacts directly to the release (not zipped workflow artifacts).
+      - name: Attach Android artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: Emberhold ${{ steps.release.outputs.tag }}
           draft: false
           prerelease: false
-          fail_on_unmatched_files: true
-          files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          fail_on_unmatched_files: false
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
 
 # Re-pushed so GitHub picks up the workflow.
