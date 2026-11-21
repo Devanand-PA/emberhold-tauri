@@ -5,6 +5,7 @@
  *   game/     git submodule -> https://github.com/Devanand-PA/emberhold.git
  *   overlay/  Tauri-only additions that must survive game updates:
  *               src/tauri-bridge.js  native save-export bridge
+ *               src/update-check.js  upstream update check + reload prompt
  *               assets/logo.jpg      offline copy of the title logo
  *
  * Plus three small edits applied to the game's index.html:
@@ -113,6 +114,26 @@ if (!html.includes("src/tauri-bridge.js")) {
     html = html.replace(/<\/body>/i, (match) => tag + match);
   } else {
     html += "\n" + tag;
+  }
+}
+
+// Upstream update checker (overlay/src/update-check.js): embed the local game
+// commit it compares against, and load the script before the game scripts.
+const commitTag =
+  "<script>window.EmberholdGameCommit = " +
+  JSON.stringify(sourceCommit === "unknown" ? "" : sourceCommit) +
+  ";</script>\n";
+const updateTag = '<script src="src/update-check.js"></script>\n';
+if (!html.includes(updateTag)) {
+  const bridgeRe = /<script\s+src="src\/tauri-bridge\.js"><\/script>\n?/i;
+  if (bridgeRe.test(html)) {
+    html = html.replace(bridgeRe, (m) => m + commitTag + updateTag);
+  } else if (/<script\s+src=/i.test(html)) {
+    html = html.replace(/<script\s+src=/i, (m) => commitTag + updateTag + m);
+  } else if (/<\/body>/i.test(html)) {
+    html = html.replace(/<\/body>/i, (m) => commitTag + updateTag + m);
+  } else {
+    html += "\n" + commitTag + updateTag;
   }
 }
 
