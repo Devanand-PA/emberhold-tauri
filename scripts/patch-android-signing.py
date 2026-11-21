@@ -60,27 +60,24 @@ def main() -> None:
 
     s = APP_GRADLE.read_text()
     if "keystore.properties" not in s:
-        # Add imports and signing config.
-        import_block = """import java.io.FileInputStream
-import java.util.Properties
-
-val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile()))
-}
-"""
-        s = import_block + s
+        # Insert signingConfigs into the android { } block. The generated
+        # template already imports java.util.Properties and provides file(),
+        # so no extra imports or top-level statements are needed — anything
+        # prepended before the template breaks the script's parse (imports
+        # must stay at the top of the file).
         s = s.replace(
             "android {\n",
             """android {
     signingConfigs {
         create("release") {
-            if (keystorePropertiesFile.exists()) {
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+            val ksProps = Properties()
+            val ksFile = file("keystore.properties")
+            if (ksFile.exists()) {
+                ksProps.load(ksFile.inputStream())
+                storeFile = file(ksProps["storeFile"] as String)
+                storePassword = ksProps["storePassword"] as String
+                keyAlias = ksProps["keyAlias"] as String
+                keyPassword = ksProps["keyPassword"] as String
             }
         }
     }
