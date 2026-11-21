@@ -13,6 +13,7 @@ overlay/           Tauri-only additions layered on top of the game:
   assets/logo.jpg      offline copy of the title-screen logo
 scripts/
   sync-frontend.mjs  builds frontend/ from game/ + overlay/
+  patch-android-fullscreen.mjs  immersive system-bar patch for the generated Android project
   index-head.html    doctype/<head> prefix added to the game's index.html
 frontend/          GENERATED + gitignored — served by Tauri. Never edit by hand.
 src-tauri/         Rust/Tauri project, config, icons
@@ -114,10 +115,11 @@ Two workflows live in `.github/workflows/`:
   with the official `tauri-action`, then publishes everything to a GitHub
   release named `v<version>`. Bundles are also attached as workflow artifacts.
 - **Android APK** (`android.yml`) — installs the Android SDK/NDK and JDK,
-  generates the Tauri Android project with `tauri android init --ci`, builds an
-  installable debug-signed universal APK for all four ABIs, and attaches the
-  raw `.apk` file directly to the same published GitHub release (not as a
-  zipped workflow artifact), so it downloads ready to install.
+  generates the Tauri Android project with `tauri android init --ci`, patches
+  it for immersive fullscreen, builds an installable debug-signed universal APK
+  for all four ABIs, and attaches the raw `.apk` file directly to the same
+  published GitHub release (not as a zipped workflow artifact), so it downloads
+  ready to install.
 
 Both workflows check out with submodules and run `npm run sync` before building,
 since `frontend/` is generated and not tracked by git. They run on a pushed
@@ -128,3 +130,17 @@ The Android workflow uses a debug key so the APK installs directly. For a
 Play-Store-ready signed AAB/APK, add a release keystore as repository secrets
 and switch the build step to a release build with Tauri's Android signing
 configuration.
+
+### Android fullscreen
+
+Tauri's generated Android template calls `enableEdgeToEdge()`, which lets the
+WebView draw behind the system bars but never hides them. The status bar
+therefore keeps reserving space and the game is not truly fullscreen.
+
+`scripts/patch-android-fullscreen.mjs` rewrites the generated
+`MainActivity.kt` to hide the status and navigation bars in sticky-immersive
+mode (swiping from an edge reveals them temporarily) and to re-hide them when
+the activity regains focus. The Android workflow runs it after
+`tauri android init`; for local builds run `npx tauri android init` once, then
+use `npm run android:build` or `npm run android:dev`, which apply the patch
+before invoking Tauri. `npm run android:patch` applies it on its own.

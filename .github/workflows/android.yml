@@ -92,6 +92,11 @@ jobs:
       - name: Initialize the Tauri Android project
         run: npx tauri android init --ci
 
+      # Tauri's Android template only draws edge-to-edge; it never hides the
+      # system bars. Patch the generated MainActivity for immersive fullscreen.
+      - name: Enable immersive fullscreen in the Android app
+        run: node scripts/patch-android-fullscreen.mjs
+
       - name: Match generated Gradle config to installed SDK
         run: |
           # Tauri's template currently targets API 37; the GitHub runner's

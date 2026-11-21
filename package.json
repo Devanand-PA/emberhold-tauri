@@ -11,6 +11,9 @@
     "dev": "tauri dev",
     "prebuild": "npm run sync",
     "build": "tauri build",
+    "android:patch": "node scripts/patch-android-fullscreen.mjs",
+    "android:build": "npm run sync && node scripts/patch-android-fullscreen.mjs && tauri android build",
+    "android:dev": "npm run sync && node scripts/patch-android-fullscreen.mjs && tauri android dev",
     "pretest": "npm run sync",
     "test": "node test/bridge_test.mjs && node test/sync_test.mjs && node test/update_check_test.mjs",
     "info": "tauri info"
