@@ -24,7 +24,10 @@ test/              unit tests for the bridge (plain node)
 
 1. prepends the HTML5 doctype / `<head>` prefix (the Perchance export starts at `<style>`),
 2. points the title logo at the bundled `assets/logo.jpg` instead of a remote URL,
-3. inserts `<script src="src/tauri-bridge.js"></script>` before all game scripts.
+3. inserts `<script src="src/tauri-bridge.js"></script>` before all game scripts,
+4. unwraps the race/gender button groups from `<label>` — browsers otherwise
+   forward a re-rendered button click back to the first button, snapping the
+   pick back to Human/Male.
 
 `npm run dev` and `npm run build` run this automatically (via `predev` / `prebuild`).
 

@@ -11,6 +11,8 @@
  *   1. prepend the HTML5 doctype / <head> wrapper (the Perchance export omits it)
  *   2. point the title logo at the bundled copy instead of a remote URL
  *   3. load tauri-bridge.js before all other game scripts
+ *   4. unwrap the race/gender pickers from <label> so clicks don't get
+ *      forwarded back to the first (Human/Male) button
  *
  * `frontend/` is generated output and is gitignored — never edit it by hand.
  *
@@ -90,6 +92,16 @@ if (!/^\s*<!DOCTYPE html>/i.test(html)) {
 html = html.replace(
   /<h1\b[^>]*\btitle-logo\b[^>]*>[\s\S]*?<img\b[^>]*\bsrc="[^"]*"/i,
   (match) => match.replace(/\bsrc="[^"]*"/i, 'src="assets/logo.jpg"')
+);
+
+// The race and gender pickers are button groups wrapped in <label> elements.
+// Browsers treat the first button as the label's control and, because
+// hcSetRace() re-renders the buttons mid-click (detaching the event target),
+// forward a second click to that first button — snapping the pick back to
+// Human/Male. Plain <div> wrappers keep the styling but not the label behavior.
+html = html.replace(
+  /<label class="hc-label">((?:(?!<\/label>)[\s\S])*class="hc-races"(?:(?!<\/label>)[\s\S])*)<\/label>/g,
+  (match, inner) => `<div class="hc-label">${inner}</div>`
 );
 
 // Native save-export bridge must load before the game scripts that use it.
