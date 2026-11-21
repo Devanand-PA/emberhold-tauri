@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::Manager;
-use tauri::WebviewWindow;
+use tauri::Window;
 
 /// Native replacement for a blob download (WebKitGTK has no download handler,
 /// so `<a download>` clicks silently fail on Linux).
@@ -177,17 +177,17 @@ async fn pull_game_updates(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn set_fullscreen(window: WebviewWindow, fullscreen: bool) -> Result<(), String> {
+fn set_fullscreen(window: Window, fullscreen: bool) -> Result<(), String> {
     window.set_fullscreen(fullscreen).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn is_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+fn is_fullscreen(window: Window) -> Result<bool, String> {
     window.is_fullscreen().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn toggle_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+fn toggle_fullscreen(window: Window) -> Result<bool, String> {
     let next = !window.is_fullscreen().map_err(|e| e.to_string())?;
     window.set_fullscreen(next).map_err(|e| e.to_string())?;
     Ok(next)

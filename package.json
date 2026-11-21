@@ -1,8 +1,8 @@
 {
   "name": "emberhold-tauri",
-  "version": "1.2.2",
+  "version": "1.2.6",
   "private": true,
-  "description": "Emberhold — Living World Dungeon Crawler, packaged as a Tauri desktop app",
+  "description": "Emberhold \u2014 Living World Dungeon Crawler, packaged as a Tauri desktop app",
   "scripts": {
     "tauri": "tauri",
     "sync": "node scripts/sync-frontend.mjs",
