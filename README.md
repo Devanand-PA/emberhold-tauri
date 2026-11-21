@@ -77,6 +77,14 @@ That is the whole update — one command, no copying files, no merge conflicts
 from game changes in this repo. It is equivalent to `git submodule update
 --remote game && npm run sync`.
 
+**Packaged app (no `game/` checkout):** the app can't `git pull` from inside a
+static bundle. Clicking **Reload to update** instead clones the upstream game
+repo into your app-data dir
+(`~/.local/share/com.thevoidis999.emberhold/game`) — the app then has an
+on-disk checkout later calls `fetch` + `git merge --ff-only origin/master` on.
+To actually play the update, install the latest app build (the toast says the
+game dir it prepared).
+
 To pin a specific game version instead, check out the desired commit inside
 `game/`, run `npm run sync`, and commit the submodule pointer in this repo.
 CI builds use the pinned commit for reproducible releases.

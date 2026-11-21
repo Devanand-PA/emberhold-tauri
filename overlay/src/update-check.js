@@ -12,7 +12,8 @@
  * to pull them?"):
  *   - "Reload to update" runs the native `pull_game_updates` command
  *     (git pull + frontend re-sync in dev, src-tauri/src/lib.rs) and then
- *     reloads the game.
+ *     reloads the game. In a packaged build it instead clones the upstream
+ *     game repo into the app-data dir and toasts how to play the update.
  *   - "Later" dismisses the prompt for 12h per upstream SHA (localStorage).
  *
  * In a plain browser (no Tauri) reloading pulls nothing new — game files in
@@ -175,8 +176,19 @@
       p.then(function (result) {
         var commit = (result && typeof result === "object" && typeof result.commit === "string")
           ? result.commit : result;
+        var served = !(result && typeof result === "object" && result.served === false);
+        var dir = (result && typeof result === "object" && typeof result.dir === "string")
+          ? result.dir : "";
         if (typeof commit === "string" && commit) window.EmberholdGameCommit = commit;
         saveHandled(remote);
+        if (!served) {
+          // Packaged build: its webview serves the embedded static bundle, so
+          // the update was pulled into the app-data game dir to build on —
+          // playing it takes the next app build. Don't reload here.
+          toast("✅ Update downloaded" + (dir ? " to " + dir : "") +
+            " — install the latest app build to play it.", 6000);
+          return;
+        }
         toast("✅ Updates pulled — reloading the game…", 4000);
         window.setTimeout(reloadPage, 300);
       }, function (err) {

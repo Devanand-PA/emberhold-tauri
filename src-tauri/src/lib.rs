@@ -1,5 +1,5 @@
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use std::path::{Path, PathBuf};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -112,25 +112,102 @@ fn find_game_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     None
 }
 
+/// Upstream game repo: the remote `game/` points at.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+const GAME_REPO_URL: &str = "https://github.com/Devanand-PA/emberhold.git";
+
+/// Result of `pull_game_updates`.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[derive(Serialize)]
+struct PullResult {
+    /// New short HEAD of the game dir after the update.
+    commit: String,
+    /// The game dir the app fetched/ff-ed in (for packaged builds).
+    dir: Option<String>,
+    /// Whether the new commit is actually served by the running build.
+    /// `false` for packaged builds: their webview serves the embedded static
+    /// bundle, so the update is downloaded to the app-data dir to build on —
+    /// the user gets it with the next app build.
+    served: bool,
+}
+
+/// In a packaged build the game lives at `app_data_dir/game` — the target of
+/// `pull_game_updates`.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn app_data_game_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_data_dir().ok()?.join("game");
+    if (dir.join(".git")).exists() || dir.join("index.html").is_file() {
+        Some(dir)
+    } else {
+        None
+    }
+}
+
+/// Packaged update path: clone the upstream game repo into the app-data dir
+/// so the game exists as an on-disk checkout later `pull_game_updates` calls
+/// fetch/fast-forward.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn ensure_packaged_clone(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let dir = app_data.join("game");
+    if short_head(&dir).is_some() {
+        return Ok(dir);
+    }
+    std::fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
+    // Verify the upstream is reachable before cloning.
+    git_out(&app_data, &["ls-remote", GAME_REPO_URL, "HEAD"])
+        .ok_or_else(|| "could not read the upstream commit — is git installed and can we reach the game repo?".to_string())?;
+    let _ = std::fs::remove_dir_all(&dir);
+    let out = std::process::Command::new("git")
+        .arg("clone")
+        .arg(GAME_REPO_URL)
+        .arg(&dir)
+        .output()
+        .map_err(|e| format!("git clone failed to start: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "git clone failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    if short_head(&dir).is_none() {
+        return Err("cloned game dir has no readable HEAD".to_string());
+    }
+    Ok(dir)
+}
+
 /// `game_commit`: short HEAD SHA of the local game checkout — the local side
 /// of the frontend's GitHub-API comparison (frontend/src/update-check.js).
+/// In a packaged build (no checkout under the usual seeds) it falls back to
+/// the downloaded snapshot at `app_data_dir/game`.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 async fn game_commit(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = find_game_dir(&app).ok_or_else(|| "no game checkout found".to_string())?;
-    short_head(&dir).ok_or_else(|| "could not read the game commit".to_string())
+    if let Some(dir) = find_game_dir(&app) {
+        return short_head(&dir).ok_or_else(|| "could not read the game commit".to_string());
+    }
+    if let Some(dir) = app_data_game_dir(&app) {
+        return short_head(&dir).ok_or_else(|| "could not read the game commit".to_string());
+    }
+    Err("no game checkout found".to_string())
 }
 
 /// `pull_game_updates`: fast-forward the game checkout to origin/master
 /// (`git merge --ff-only origin/master`) and, in the dev repo, regenerate
 /// frontend/ from it via scripts/sync-frontend.mjs so a reload serves the
 /// pulled game. Returns the new short HEAD.
+///
+/// In a packaged build (no checkout under the usual seeds) the game is
+/// downloaded instead: the upstream repo is cloned into the app-data dir and
+/// later calls fetch/ff it. `served` is false there because the running build
+/// serves its embedded game — the download builds on the next app build.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-async fn pull_game_updates(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = find_game_dir(&app).ok_or_else(|| {
-        "no game checkout found in this build — restart the app to pick up newer releases".to_string()
-    })?;
+async fn pull_game_updates(app: tauri::AppHandle) -> Result<PullResult, String> {
+    let (dir, packaged) = match find_game_dir(&app) {
+        Some(d) => (d, false),
+        None => (ensure_packaged_clone(&app)?, true),
+    };
 
     // Fetch the latest tip of the game repo (best effort: offline is not yet an error).
     let _ = git_out(&dir, &["fetch", "origin"]);
@@ -138,7 +215,14 @@ async fn pull_game_updates(app: tauri::AppHandle) -> Result<String, String> {
 
     let remote = git_out(&dir, &["rev-parse", "origin/master"]);
     match remote.as_deref() {
-        Some(r) if r.starts_with(local.as_str()) => return Ok(local), // already at origin/master
+        Some(r) if r.starts_with(local.as_str()) => {
+            // already at origin/master
+            return Ok(PullResult {
+                commit: local,
+                dir: Some(dir.display().to_string()),
+                served: !packaged,
+            });
+        }
         None => {
             return Err(
                 "could not read the upstream commit (origin/master) — is the game repo's origin configured?"
@@ -173,7 +257,11 @@ async fn pull_game_updates(app: tauri::AppHandle) -> Result<String, String> {
         }
     }
 
-    Ok(short_head(&dir).unwrap_or(local))
+    Ok(PullResult {
+        commit: short_head(&dir).unwrap_or(local),
+        dir: Some(dir.display().to_string()),
+        served: !packaged,
+    })
 }
 
 #[tauri::command]

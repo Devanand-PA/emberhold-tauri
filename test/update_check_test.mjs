@@ -32,7 +32,7 @@ class FakeEl {
   click() { for (const f of this.listeners.click || []) f({ target: this }); }
 }
 
-function makeEnv({ tauri = false, invokeRejects = false, local = "49c1471", remote, seedHandled, fetchImpl, reloads }) {
+function makeEnv({ tauri = false, invokeRejects = false, local = "49c1471", remote, seedHandled, fetchImpl, reloads, pullResult }) {
   const invoked = [];
   const toasts = [];
   const doc = { _all: [], readyState: "complete" };
@@ -61,6 +61,7 @@ function makeEnv({ tauri = false, invokeRejects = false, local = "49c1471", remo
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd) => {
         invoked.push(cmd);
+        if (pullResult && cmd === "pull_game_updates") return Promise.resolve(pullResult);
         return invokeRejects ? Promise.reject(new Error("no game checkout found")) : Promise.resolve(local);
       },
     };
@@ -167,6 +168,28 @@ const remoteFetch = (remote, reject) => () =>
   const env = makeEnv({ tauri: true, local: null, remote: REMOTE_NEW, fetchImpl: remoteFetch(REMOTE_NEW), reloads: [], invokeRejects: true });
   await flush();
   check("no-local: no prompt", env.doc.getElementById("updatePrompt") === null);
+}
+
+// 8) packaged: pull_game_updates returns {commit, served:false} → toast, no reload
+{
+  const reloads = [];
+  const env = makeEnv({
+    tauri: true, local: LOCAL, remote: REMOTE_NEW, fetchImpl: remoteFetch(REMOTE_NEW), reloads,
+    pullResult: {
+      commit: NEW_SHA,
+      dir: "/home/u/.local/share/com.thevoidis999.emberhold/game",
+      served: false,
+    },
+  });
+  await flush();
+  const modal = env.doc.getElementById("updatePrompt");
+  check("packaged: prompt shown", modal !== null && modal.hidden === false);
+  env.doc.getElementById("updateReloadBtn").click();
+  await flush();
+  check("packaged: pull_game_updates invoked", env.invoked.includes("pull_game_updates"));
+  check("packaged: no reload", reloads.length === 0);
+  check("packaged: update toast", env.toasts.some((t) => t.includes("install the latest app build")));
+  check("packaged: commit set", env.window.EmberholdGameCommit === NEW_SHA);
 }
 
 const failed = checks.filter(([, ok]) => !ok);
