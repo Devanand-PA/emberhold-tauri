@@ -17,7 +17,7 @@ import pathlib
 import subprocess
 import sys
 
-ROOT = pathlib.Path("src-tauri/gen/android")
+ROOT = pathlib.Path(__file__).resolve().parents[1] / "src-tauri" / "gen" / "android"
 APP_GRADLE = ROOT / "app" / "build.gradle.kts"
 
 
@@ -65,20 +65,27 @@ def main() -> None:
         # so no extra imports or top-level statements are needed — anything
         # prepended before the template breaks the script's parse (imports
         # must stay at the top of the file).
+        #
+        # Use rootProject.file(): a plain file("keystore.properties") resolves
+        # relative to the :app project directory (gen/android/app), not the
+        # Gradle root where keystore.properties is written below. Getting this
+        # wrong leaves storeFile unset and Gradle fails at
+        # :app:validateSigning*Release with "Keystore file not set".
         s = s.replace(
             "android {\n",
             """android {
     signingConfigs {
         create("release") {
             val ksProps = Properties()
-            val ksFile = file("keystore.properties")
-            if (ksFile.exists()) {
-                ksProps.load(ksFile.inputStream())
-                storeFile = file(ksProps["storeFile"] as String)
-                storePassword = ksProps["storePassword"] as String
-                keyAlias = ksProps["keyAlias"] as String
-                keyPassword = ksProps["keyPassword"] as String
+            val ksFile = rootProject.file("keystore.properties")
+            if (!ksFile.exists()) {
+                error("Missing release signing properties: ${ksFile}")
             }
+            ksProps.load(ksFile.inputStream())
+            storeFile = rootProject.file(ksProps["storeFile"] as String)
+            storePassword = ksProps["storePassword"] as String
+            keyAlias = ksProps["keyAlias"] as String
+            keyPassword = ksProps["keyPassword"] as String
         }
     }
 """,
@@ -91,6 +98,16 @@ def main() -> None:
 """,
             1,
         )
+        if "rootProject.file(\"keystore.properties\")" not in s or (
+            "signingConfig = signingConfigs.getByName(\"release\")" not in s
+        ):
+            print(
+                "Could not find the android {} / release build type blocks in "
+                "the generated app/build.gradle.kts — Tauri's template may have "
+                "changed.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         APP_GRADLE.write_text(s)
         print("Patched app/build.gradle.kts with release signing config.")
     else:
