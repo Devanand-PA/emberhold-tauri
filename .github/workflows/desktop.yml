@@ -80,13 +80,24 @@ jobs:
       - name: Generate frontend from game submodule
         run: npm run sync
 
+      - name: Determine release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            version=$(node -p "require('./package.json').version")
+            echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "Emberhold v__VERSION__"
+          tagName: ${{ steps.release.outputs.tag }}
+          releaseName: "Emberhold ${{ steps.release.outputs.tag }}"
           releaseBody: |
             Desktop builds for Windows, macOS and Linux.
             The Android APK is attached to this release as a raw, installable
