@@ -100,6 +100,13 @@ If you would rather every build use upstream HEAD automatically, change the
 
 - Saves use the webview's IndexedDB/localStorage and are kept per user profile,
   exactly like in the browser. There are 5 in-game slots.
+- **Saves are durable on every build.** Every LocalKv put also mirrors the
+  value to a per-key JSON file under `<app_data_dir>/localkv_shadow/<folder>/`
+  through the Rust commands `kv_shadow_read`/`kv_shadow_write`/
+  `kv_shadow_delete`/`kv_shadow_entries` (`src-tauri/src/lib.rs`); reads fall
+  back to the shadow when IndexedDB misses. This covers WebKitGTK builds
+  (Linux, incl. AppImage) where IndexedDB writes can be silently lost, so
+  slot saves survive closing and reopening the app.
 - The game fetches `src/data/bosses.yaml` and `src/app/CHANGELOG.md` from its
   own bundled assets (now under generated `frontend/`); no external files are
   required.

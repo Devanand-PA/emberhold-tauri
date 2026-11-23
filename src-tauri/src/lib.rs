@@ -306,6 +306,143 @@ fn toggle_fullscreen(window: Window) -> Result<bool, String> {
     }
 }
 
+// ---------- LocalKv disk shadow ----------
+//
+// The game persists saves, world chunks, NPCs and dunge pic data through the
+// webview's IndexedDB (see game/src/core/kv_local.js). WebKitGTK — the engine
+// Tauri uses on Linux, including AppImage builds — can silently lose those
+// writes: saves then vanish on restart because everything else falls back to
+// in-memory maps. This shadow is a small JSON file per key written through
+// the Rust side to `<app_data_dir>/localkv_shadow/<folder>/`, a location the
+// webview's broken IndexedDB path can't affect. `storeGet`/`storePut` in
+// LocalKv fall back to it when IndexedDB misses, so every build keeps its
+// saves. Writes go to both stores, so where IndexedDB works nothing changes
+// (the shadow is only ever a read fallback).
+
+/// FNV-1a 64-bit hash of the (already-encoded) key — the file name for a
+/// shadow entry. Stable across runs and safe for the filesystem.
+fn shadow_hash(key: &str) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in key.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
+/// Sanitized folder name (mirrors the game's folder names like "psave",
+/// "wchunks_s2", "wchunks_ch_AB12CD34EF56").
+fn shadow_folder_name(folder: &str) -> String {
+    folder
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn shadow_dir(app: &tauri::AppHandle, folder: &str) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("localkv_shadow")
+        .join(shadow_folder_name(folder)))
+}
+
+fn shadow_file(dir: &Path, key: &str) -> PathBuf {
+    dir.join(format!("{:016x}.json", shadow_hash(key)))
+}
+
+/// Write one shadow entry: `<dir>/<hash>.json` containing `{"k": <key>, "v": <data>}`.
+/// Atomic via write-to-temp + rename.
+#[tauri::command]
+fn kv_shadow_write(
+    app: tauri::AppHandle,
+    folder: String,
+    key: String,
+    data: serde_json::Value,
+) -> Result<(), String> {
+    let dir = shadow_dir(&app, &folder)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file = shadow_file(&dir, &key);
+    let name = file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "shadow.json".to_string());
+    let tmp = file.with_file_name(format!("{name}.tmp"));
+    let mut obj = serde_json::Map::new();
+    obj.insert("k".into(), serde_json::Value::String(key));
+    obj.insert("v".into(), data);
+    let body = serde_json::to_vec(&serde_json::Value::Object(obj)).map_err(|e| e.to_string())?;
+    std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &file).map_err(|e| format!("rename shadow file: {e}"))?;
+    Ok(())
+}
+
+/// Read one shadow entry; None when absent/corrupt.
+#[tauri::command]
+fn kv_shadow_read(
+    app: tauri::AppHandle,
+    folder: String,
+    key: String,
+) -> Result<Option<serde_json::Value>, String> {
+    let dir = shadow_dir(&app, &folder)?;
+    let file = shadow_file(&dir, &key);
+    let text = match std::fs::read_to_string(file) {
+        Ok(t) => t,
+        Err(_) => return Ok(None),
+    };
+    let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    Ok(v.get("v").cloned())
+}
+
+/// Delete one shadow entry (missing files are fine).
+#[tauri::command]
+fn kv_shadow_delete(app: tauri::AppHandle, folder: String, key: String) -> Result<(), String> {
+    let dir = shadow_dir(&app, &folder)?;
+    let file = shadow_file(&dir, &key);
+    match std::fs::remove_file(file) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Enumerate every shadow entry in a folder: Vec of [encoded key, value].
+#[tauri::command]
+fn kv_shadow_entries(app: tauri::AppHandle, folder: String) -> Result<Vec<(String, serde_json::Value)>, String> {
+    let dir = shadow_dir(&app, &folder)?;
+    let mut out: Vec<(String, serde_json::Value)> = Vec::new();
+    let rd = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd,
+        Err(_) => return Ok(out), // no shadow data for this folder yet
+    };
+    let mut paths: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+    paths.sort();
+    for path in paths {
+        if path.extension().map(|e| e != "json").unwrap_or(true) {
+            continue; // skip .tmp files and junk
+        }
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let v: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if let (Some(k), Some(val)) = (v.get("k").and_then(|x| x.as_str()), v.get("v").cloned()) {
+            out.push((k.to_string(), val));
+        }
+    }
+    Ok(out)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -317,14 +454,22 @@ pub fn run() {
         pull_game_updates,
         set_fullscreen,
         is_fullscreen,
-        toggle_fullscreen
+        toggle_fullscreen,
+        kv_shadow_read,
+        kv_shadow_write,
+        kv_shadow_delete,
+        kv_shadow_entries
     ]);
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         set_fullscreen,
         is_fullscreen,
-        toggle_fullscreen
+        toggle_fullscreen,
+        kv_shadow_read,
+        kv_shadow_write,
+        kv_shadow_delete,
+        kv_shadow_entries
     ]);
 
     builder
