@@ -9,8 +9,10 @@ const INDEX = fileURLToPath(new URL("../frontend/index.html", import.meta.url));
 const html = readFileSync(INDEX, "utf8");
 
 const checks = {
-  html5_doctype: /^<!DOCTYPE html>/i.test(html),
+  // upstream keeps a UTF-8 BOM ahead of the doctype (legacy-charset hosts)
+  html5_doctype: /^\uFEFF?<!DOCTYPE html>/i.test(html),
   bridge_loaded_first: html.includes('<script src="src/tauri-bridge.js"></script>'),
+  update_check_loaded: html.includes('<script src="src/update-check.js"></script>'),
   bundled_logo: html.includes('src="assets/logo.jpg"'),
   race_picker_present: html.includes('id="hcRaces"'),
   gender_picker_present: html.includes('id="hcGenders"'),

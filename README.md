@@ -7,28 +7,32 @@ The game is **linked, not copied**: `game/` is a git submodule pointing at the u
 ## Layout
 
 ```
-game/              git submodule -> github.com/Devanand-PA/emberhold (the live game)
-overlay/           Tauri-only additions layered on top of the game:
-  src/tauri-bridge.js  native save-export bridge (loaded first; no-op in a browser)
-  assets/logo.jpg      offline copy of the title-screen logo
+game/              git submodule -> github.com/Devanand-PA/emberhold (the live game,
+                   including the Tauri bridge, update checker and bundled logo)
 scripts/
-  sync-frontend.mjs  builds frontend/ from game/ + overlay/
+  sync-frontend.mjs  copies game/ into frontend/ (plain copy, no patches)
   patch-android-fullscreen.mjs  immersive system-bar patch for the generated Android project
-  index-head.html    doctype/<head> prefix added to the game's index.html
 frontend/          GENERATED + gitignored — served by Tauri. Never edit by hand.
 src-tauri/         Rust/Tauri project, config, icons
 package.json       Tauri CLI as an npm dev-dependency (no frontend build step)
 test/              unit tests for the bridge (plain node)
 ```
 
-`npm run sync` copies `game/` into `frontend/`, overlays the Tauri-only files, and patches the game's `index.html` three ways:
+`npm run sync` copies `game/` into `frontend/` as-is. Everything the desktop
+shell needs lives upstream in the game repo, so there is no overlay and no
+patch step:
 
-1. prepends the HTML5 doctype / `<head>` prefix (the Perchance export starts at `<style>`),
-2. points the title logo at the bundled `assets/logo.jpg` instead of a remote URL,
-3. inserts `<script src="src/tauri-bridge.js"></script>` before all game scripts,
-4. unwraps the race/gender button groups from `<label>` — browsers otherwise
+1. the HTML5 doctype / `<head>` wrapper (ahead of it, a UTF-8 BOM for hosts
+   that send legacy charset headers),
+2. the title logo bundled at `assets/logo.jpg` instead of a remote URL,
+3. `<script src="src/tauri-bridge.js"></script>` and `src/update-check.js`
+   before all game scripts (both no-op in a plain browser),
+4. race/gender button groups unwrapped from `<label>` — browsers otherwise
    forward a re-rendered button click back to the first button, snapping the
    pick back to Human/Male.
+
+Desktop-only additions belong upstream in emberhold, guarded to no-op outside
+Tauri — never patch them in here.
 
 `npm run dev` and `npm run build` run this automatically (via `predev` / `prebuild`).
 
@@ -106,11 +110,12 @@ If you would rather every build use upstream HEAD automatically, change the
   is needed there.
 - **Save export** (📤 on a slot / multiplayer world row) normally triggers a
   blob download. WebKitGTK (Tauri on Linux) has no download handler, so
-  `overlay/src/tauri-bridge.js` intercepts those clicks and writes the backup
-  through a native save dialog (Rust command `save_export_file`, using the
-  `rfd` crate). Save import (📥) uses a file picker and works as-is. The bridge
-  is a no-op when the same files are opened in a normal browser. Keep any
-  bridge changes in `overlay/` — edits to `frontend/` are overwritten by sync.
+  `game/src/tauri-bridge.js` (upstream) intercepts those clicks and writes the
+  backup through a native save dialog (Rust command `save_export_file`, using
+  the `rfd` crate). Save import (📥) uses a file picker and works as-is. The
+  bridge is a no-op when the same files are opened in a normal browser. Keep
+  any bridge changes upstream in the game repo — edits to `frontend/` are
+  overwritten by sync.
 - To change the window size/title or bundle identifier, edit
   `src-tauri/tauri.conf.json`.
 

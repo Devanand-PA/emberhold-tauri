@@ -1,11 +1,11 @@
-// Standalone test for overlay/src/update-check.js (the upstream update check;
+// Standalone test for game/src/update-check.js (the upstream update check;
 // copied into generated frontend/src/ by `npm run sync`).
 // Run: npm test   (uses only Node, no dependencies)
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const UPDATE_CHECK = fileURLToPath(new URL("../overlay/src/update-check.js", import.meta.url));
+const UPDATE_CHECK = fileURLToPath(new URL("../game/src/update-check.js", import.meta.url));
 const src = readFileSync(UPDATE_CHECK, "utf8");
 
 // Minimal DOM/window mock — update-check uses only these operations.

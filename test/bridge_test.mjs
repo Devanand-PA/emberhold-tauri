@@ -1,4 +1,4 @@
-// Standalone test for overlay/src/tauri-bridge.js (the Tauri overlay source;
+// Standalone test for game/src/tauri-bridge.js (the upstream Tauri bridge;
 // it is copied into generated frontend/src/ by `npm run sync`)
 // Run: npm test   (uses only Node, no dependencies)
 // Two isolated VM contexts:
@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const BRIDGE = fileURLToPath(new URL("../overlay/src/tauri-bridge.js", import.meta.url));
+const BRIDGE = fileURLToPath(new URL("../game/src/tauri-bridge.js", import.meta.url));
 const src = readFileSync(BRIDGE, "utf8");
 
 // anchor factory + invocation, evaluated INSIDE the sandbox so `instanceof`
