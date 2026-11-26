@@ -1,6 +1,6 @@
 [package]
 name = "emberhold"
-version = "1.3.2"
+version = "1.3.3"
 description = "Emberhold — Living World Dungeon Crawler"
 authors = ["thevoidis999"]
 edition = "2021"
