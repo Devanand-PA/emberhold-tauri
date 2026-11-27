@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Patch the generated Tauri Android project so the release build is signed.
+"""Patch the generated Tauri Android project so the release build is signed
+with the repository's stable release keystore.
 
-Called by .github/workflows/android.yml ("Configure Android release signing")
+Called by .github/workflows/release.yml ("Configure Android release signing")
 after `npx tauri android init --ci` generates src-tauri/gen/android/. Writes
-keystore.properties pointing at a release keystore (a temporary CI key when
-the ANDROID_KEYSTORE_* secrets are absent) and injects signingConfigs plus
-the signingConfig wiring into src-tauri/gen/android/app/build.gradle.kts, so
+keystore.properties pointing at the release keystore provided by the
+ANDROID_KEYSTORE_* repository secrets and injects signingConfigs plus the
+signingConfig wiring into src-tauri/gen/android/app/build.gradle.kts, so
 `npx tauri android build --ci` produces signature-compatible APKs/AABs.
+
+A single stable keystore is required so that Android updates keep working:
+every release must be signed with the same key. The script therefore FAILS
+instead of generating a temporary key when the secrets are missing — APKs
+signed with per-build random keys can never be updated over installed ones.
 
 Run from the repository root (the workflow's workspace).
 """
@@ -14,7 +20,6 @@ Run from the repository root (the workflow's workspace).
 import base64
 import os
 import pathlib
-import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1] / "src-tauri" / "gen" / "android"
@@ -31,24 +36,21 @@ def main() -> None:
     alias = os.environ.get("ANDROID_KEY_ALIAS", "").strip()
     key_pass = os.environ.get("ANDROID_KEY_PASSWORD", "").strip()
 
+    if not (ks and ks_pass and alias and key_pass):
+        print(
+            "ANDROID_KEYSTORE_* secrets are not set. A stable release "
+            "keystore is required so Android APK/AAB updates stay "
+            "signature-compatible; refusing to generate a temporary key. "
+            "Set ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, "
+            "ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD in the repository "
+            "secrets and run the workflow again.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     keystore_path = ROOT / "release-keystore.jks"
-    if ks and ks_pass and alias and key_pass:
-        keystore_path.write_bytes(base64.b64decode(ks))
-        print("Using release keystore from repository secrets.")
-    else:
-        ks_pass = "emberhold-ci"
-        alias = "emberhold"
-        key_pass = "emberhold-ci"
-        subprocess.check_call([
-            "keytool", "-genkeypair", "-v",
-            "-keystore", str(keystore_path),
-            "-storepass", ks_pass,
-            "-alias", alias,
-            "-keypass", key_pass,
-            "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
-            "-dname", "CN=Emberhold CI, OU=CI, O=Emberhold, L=Internet, S=Internet, C=US",
-        ])
-        print("::warning::ANDROID_KEYSTORE_* secrets not set; generated temporary CI signing key. APKs are installable, but upgrades may not be signature-compatible across keys.")
+    keystore_path.write_bytes(base64.b64decode(ks))
+    print("Using release keystore from repository secrets.")
 
     props = ROOT / "keystore.properties"
     props.write_text(

@@ -9,14 +9,15 @@ name: Release
 # for the same tag.
 #
 # Android signing:
-#   For update-compatible release signing, configure repository secrets:
+#   Android APK/AAB updates require a single stable signing key. Configure
+#   repository secrets:
 #     ANDROID_KEYSTORE_BASE64  - base64-encoded .jks/.keystore file
 #     ANDROID_KEYSTORE_PASSWORD
 #     ANDROID_KEY_ALIAS
 #     ANDROID_KEY_PASSWORD
-#   If these are not set, the workflow generates a temporary CI signing key so
-#   release APKs remain installable, but upgrades will not be signature-compatible
-#   across different CI-generated keys.
+#   If these are not set, the Android build FAILS (it never generates a
+#   temporary CI key — per-build random keys would break updates over
+#   installed APKs).
 #
 # The Linux `--bundles` argument overrides tauri.linux.conf.json so an
 # AppImage is produced in CI; tauri-action uploads all bundles it finds

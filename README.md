@@ -128,28 +128,34 @@ If you would rather every build use upstream HEAD automatically, change the
 
 ## Automated builds (GitHub Actions)
 
-Two workflows live in `.github/workflows/`:
+One workflow lives in `.github/workflows/release.yml`:
 
-- **Desktop releases** (`desktop.yml`) — builds Windows x64 (`.msi` + NSIS
-  `.exe`), macOS arm64 + x64 (`.app`/`.dmg`) and Linux x64 (`.deb`/`.rpm`)
-  with the official `tauri-action`, then publishes everything to a GitHub
-  release named `v<version>`. Bundles are also attached as workflow artifacts.
-- **Android APK** (`android.yml`) — installs the Android SDK/NDK and JDK,
-  generates the Tauri Android project with `tauri android init --ci`, patches
-  it for immersive fullscreen, builds an installable debug-signed universal APK
-  for all four ABIs, and attaches the raw `.apk` file directly to the same
-  published GitHub release (not as a zipped workflow artifact), so it downloads
-  ready to install.
+- **Desktop releases** — builds Windows x64 (`.msi` + NSIS `.exe`), macOS
+  arm64 + x64 (`.app`/`.dmg`) and Linux x64 (`.deb`/`.rpm`/`.AppImage`) with
+  the official `tauri-action`, then publishes everything to a GitHub release
+  named `v<version>`.
+- **Android APK + AAB** — installs the Android SDK/NDK and JDK, generates the
+  Tauri Android project with `tauri android init --ci`, patches it for
+  immersive fullscreen, signs it with the release keystore, and attaches the
+  raw `.apk`/`.aab` files directly to the same published GitHub release (not
+  as zipped workflow artifacts), so they download ready to install.
 
-Both workflows check out with submodules and run `npm run sync` before building,
-since `frontend/` is generated and not tracked by git. They run on a pushed
-`v*` tag (for example `git tag v1.0.0 && git push origin v1.0.0`) or can be
-started manually from the **Actions** tab → **Run workflow**.
+Both checks run `npm run sync` before building, since `frontend/` is
+generated and not tracked by git. The workflow runs on a pushed `v*` tag (for
+example `git tag v1.0.0 && git push origin v1.0.0`) or can be started
+manually from the **Actions** tab → **Run workflow**.
 
-The Android workflow uses a debug key so the APK installs directly. For a
-Play-Store-ready signed AAB/APK, add a release keystore as repository secrets
-and switch the build step to a release build with Tauri's Android signing
-configuration.
+Android releases must be signed with a single stable key so updates over
+installed APKs keep working. Set these repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64` — base64-encoded `.jks`/`.keystore` file
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+If they are missing the Android build **fails** — the workflow never
+generates a throwaway key, because each build signing with a random key would
+break updates.
 
 ### Android fullscreen
 
